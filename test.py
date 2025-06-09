@@ -19,7 +19,7 @@ def init_train(config_model, model_file_path, tokenizer_path):
     return tokenizer, model
 
 
-def test(model_file_path, config_model: modelConfig, config_train: trainConfig):
+def test_transformer(model_file_path, config_model: modelConfig, config_train: trainConfig):
     tokenizer, model = init_train(config_model, model_file_path, config_model.token_path)
     input_msg = input('请输入:')
     while input_msg != '退出':
@@ -181,7 +181,7 @@ def stream(tokenizer, model, config_model, msg, max_len):
     print(f'')
 
 
-def test_stram(model_file_path, config_model, max_len):
+def test_little(model_file_path, config_model, max_len):
     tokenizer, model = init_train(config_model, model_file_path, config_model.token_path)
     input_text = input('请输入:')
     while input_text != '退出':
@@ -206,5 +206,5 @@ if __name__ == "__main__":
     config_train.train_type = args.mode
     model_file_path = f'{config_train.out_path}/{config_train.train_type}_{config_model.hidden_dim}.pth'
 
-    # test_stram(model_file_path, config_model, 100)
-    test(model_file_path, config_model,config_train)
+    test_little(model_file_path, config_model, 100)
+    # test_transformer(model_file_path, config_model,config_train)
