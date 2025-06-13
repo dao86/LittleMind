@@ -14,8 +14,8 @@ data_path：数据集文件地址
 mode：读取哪个训练下的model文件 pre,sft  
 
 最后是训练数据和测试效果，如下
- <img src="./img/pre_trainer.png" width="100%"> 
- <br/><img src="./img/sft_trainer.png" width="100%"> 
- <br/><img src="./img/loss_pre_512.png" width="100%"> 
- <br/><img src="./img/loss_sft.png" width="100%"> 
- <br/><img src="./img/test.png" width="100%"> 
+ <img src="./img/pre_trainer.png" width="50%"> 
+ <br/><img src="./img/sft_trainer.png" width="50%"> 
+ <br/><img src="./img/loss_pre_512.png" width="50%"> 
+ <br/><img src="./img/loss_sft.png" width="50%"> 
+ <br/><img src="./img/test.png" width="50%"> 
