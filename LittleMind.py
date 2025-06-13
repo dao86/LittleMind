@@ -1,3 +1,5 @@
+from json import JSONDecoder
+
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -11,7 +13,7 @@ from typing import Optional
 import math
 
 
-class modelConfig(PretrainedConfig):
+class modelConfig(PretrainedConfig,JSONDecoder):
     model_type = "xlm_model_config"
 
     def __init__(self,

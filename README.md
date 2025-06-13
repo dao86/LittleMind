@@ -1,31 +1,21 @@
 首先感谢MiniMind,https://github.com/jingyaogong/minimind  
-之前通过自学，学习了一些大模型的基本原理，之后又进行了几次简单实践，  
-包括使用ollama部署，利用perf框架微调，调试mcp服务与业务软件等。  
-但随着了解的深入，感觉还是非常皮毛，于是产生了自己学习手写一些代码的想法，  
-最初先学习开发简单的mnist,然后是cnn,rnn. transformer的代码，  
-但由于开发和训练过程都是自己一个人摸索，所以实际效果不理想。  
-一度以为啥都没偶学到，很沮丧。然后就是在这种迷茫的情况下，偶然发现了 MiniMind项目。  
-经过对该项目一段时间学习和实践， 终于有了一些的进步。心中十分感激，  
-因此将这段学习心得和代码发出来进行分享。因为这个代码主要用来学习和实践，又是源于mini，  
-故名LittleMind，也希望此项目将来可以由小而大的成长。  
+MiniMind项目的代码和训练过程非常适合观看和学习，本项目从此项目中获得了很多帮助。
+因为这个项目的很多思路来源于MiniMind，故名LittleMind，也希望此项目可以由小而大的学习成长。    
 
-代码可以直接使用开发工具调试，分为3部分  
-1、模型代码，LittleMind.py  
-    主要包含注意力，位置编码，ffn等代码，由于处于学习阶段，先暂时未加上如moe部分代码，  
-并对之前一些不甚了解的代码，进行了注释，如rope部分。    
+训练：  
+可以直接运行python LittleTrainer.py --mode pre  --data_path ./data/xxx.jsonl
+mode：训练模式 pre,sft,dpo,orpo  
+data_path：数据集文件地址  
+其他参数可以参考代码中的 set_train_args方法  
+目前pre sft支持checkpoint，dpo和orpo暂不支持  
 
-2、训练代码，LittleTrainer.py  
-    目前包含pre和sft模式，dpo部分还未加上去。由于目前主要还是学习笑话，
-    因此去掉了一些不想干的代码中如wandb等，如果想看loss曲线，可在tools里使用方法自行创建loss曲线图。  
-   训练时，设置mode参数为，pre或者sft，data_path设置为对应的数据集文件即可。
-    由于本人电脑缺少算力，因此写了一个分割数据集为多个文件，并训练目录下所有文件的断点续训练的功能。  
-    此功能主要用于人为中断训练后，下一可以继续从上次训练的文件开始训练。  
-    同时改写了单机多卡训练的代码，在运行时可直接设置参数ddp和world_size，即可进行多卡训练  
+测试：
+可以直接运行python test.py  --mode pre  
+mode：读取哪个训练下的model文件 pre,sft  
 
-3、运行模型代码，test.py  
-    test_little，自己手工写的推理方法，   
-    test_transformer，使用框transformer自带的推理方法，  
-    可以了解一些参数对推理的作用。    
-
-
-最后，关于之前的一些训练数据和测试效果，我保存了几张图片，放在img目录下
+最后是训练数据和测试效果，如下
+ <img src="./img/pre_trainer.png" width="100%"> 
+ <br/><img src="./img/sft_trainer.png" width="100%"> 
+ <br/><img src="./img/loss_pre.png" width="100%"> 
+ <br/><img src="./img/loss_sftr.png" width="100%"> 
+ <br/><img src="./img/test.png" width="100%"> 

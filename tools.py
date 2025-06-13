@@ -1,10 +1,8 @@
-import numpy as np
 import json
 import os
 import matplotlib.pyplot as plt
 
-
-def plot_loss_curve(file, save_path):
+def plot_loss_curve(file, save_path=None):
     """
     绘制训练损失曲线
     参数:
@@ -32,7 +30,6 @@ def plot_loss_curve(file, save_path):
         print(f"保存图片 {save_path}")
 
     plt.show()
-
 
 def split_file_into_n_parts(file_path, save_file, write_num, read_num=0):
     """
@@ -72,7 +69,7 @@ def split_file_into_n_parts(file_path, save_file, write_num, read_num=0):
 
         print(f"已创建文件: {output_file}")
 
-
 if __name__ == "__main__":
-    split_file_into_n_parts('./data/pre_test.jsonl', './data/pre_test_split', 1, 100000)
-    plot_loss_curve('./output/log/pre_log_512.log', save_path="././output/log/loss_pre_512.png")
+    # split_file_into_n_parts('./data/pre_test.jsonl', './data/pre_test_split', 1, 100000)
+    # plot_loss_curve('./output/log/pre_log_512.log', save_path="././output/log/loss_pre_512.png")
+    print(f'test')

@@ -23,7 +23,7 @@ def test_transformer(model_file_path, config_model: modelConfig, config_train: t
     tokenizer, model = init_train(config_model, model_file_path, config_model.token_path)
     input_msg = input('请输入:')
     while input_msg != '退出':
-        gen(model, input_msg, tokenizer, config_model, config_train)
+        transformer_generate(model, input_msg, tokenizer, config_model, config_train)
         input_msg = input('请输入:')
 
 
@@ -40,7 +40,7 @@ def prompt(text, tokenizer, config_model):
     return input_ids
 
 
-def gen(model, messages, tokenizer, config_model, config_train):
+def transformer_generate(model, messages, tokenizer, config_model, config_train):
     if config_train.train_type == 'sft':
         messages = [{"role": "user", "content": messages}]
         new_prompt = tokenizer.apply_chat_template(
@@ -119,7 +119,7 @@ def gen(model, messages, tokenizer, config_model, config_train):
     # print(f'res:{response}')
 
 
-def stream_gen(model, messages, tokenizer, device, sample, stream=False, max_len=100):
+def stream_generate(model, messages, tokenizer, device, sample, stream=False, max_len=100):
     model.eval()
     with torch.no_grad():
         messages = [{"role": "user", "content": messages}]
@@ -161,7 +161,7 @@ def stream_gen(model, messages, tokenizer, device, sample, stream=False, max_len
 
 
 def stream(tokenizer, model, config_model, msg, max_len):
-    token = stream_gen(model, msg, tokenizer, config_model.device, False, True, max_len)
+    token = stream_generate(model, msg, tokenizer, config_model.device, False, True, max_len)
     print(f'回答:', end='', flush=True)
     index = 0
     resls = []
