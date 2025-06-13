@@ -1,4 +1,4 @@
-首先需要感谢MiniMind项目的开源  
+首先需要感谢MiniMind项目  
 地址:https://github.com/jingyaogong/minimind  
 MiniMind代码简练易懂，说明中提供的训练过程非常适合学习和实验。  
 因此本项目从minimind中获得了很多帮助。    
