@@ -18,9 +18,9 @@ python LittleTrainer.py --mode pre  --data_path ./data/xxx.jsonl  --dim 512  --l
 --data_path ./data/xxx.jsonl ,数据集文件地址   
 --dim 512 ,模型维度 默认512  
 --layernum 8,模型层数 默认8  
-数据集的获取:
-1、魔搭社区 数据集 搜索minimind  
-注意，此项目目前还没提供tokenizer训练，只能使用现有的，bos,eos都使用的是qwen风格,看数据集时需要注意
+数据集的获取:  
+1、魔搭社区 数据集 搜索minimind   
+注意，此项目目前还没提供tokenizer训练，只能使用现有的，bos,eos都使用的是qwen风格,看数据集时需要注意  
 
 1、提供保存训练进度的sft支持checkpoint功能，但只支持pre sft训练，dpo和orpo目前还不支持    
 --train_id xxxx (训练任务id，此参数功能必需)  
