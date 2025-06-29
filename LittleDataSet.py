@@ -1,3 +1,5 @@
+from logging import exception
+
 import torch
 
 from torch.utils.data import Dataset
@@ -54,8 +56,11 @@ class dataset_sft(Dataset):
         with open(data_path, 'r', encoding='utf-8') as f:
             for line_num, line in enumerate(f, 1):
                 item = line.strip()
-                item_data = json.loads(item)
-                self.data.append(item_data)
+                try:
+                    item_data = json.loads(item)
+                    self.data.append(item_data)
+                except Exception as e:
+                    print(f"错误: {e}")
 
     def __len__(self):
         return len(self.data)

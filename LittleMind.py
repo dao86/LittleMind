@@ -38,7 +38,7 @@ class modelConfig(PretrainedConfig,JSONDecoder):
                  # 所以它们之间的关系保持不变，所以RoPE是维护相对位置信息而丢弃绝对位置信息的。
                  rope_theta: int = 100000.0,  # 旋转式位置编码 theta超参数
                  scaled_dot_product_attention=True,  # torch 是否支持缩放点积注意力机制 F.scaled_dot_product_attention
-                 flash_attn: bool = True,  # 是否使用flash_attn  结合  F.scaled_dot_product_attention 使用
+                 flash_attn: bool = False,  # 是否使用flash_attn  结合  F.scaled_dot_product_attention 使用
                  max_seq_len=256,
 
                  ####################################################
@@ -178,9 +178,6 @@ class RmsNorm(nn.Module):
         return output
 
 
-from torch import nn
-
-
 class FeedForward(nn.Module):
     def __init__(self, config: modelConfig):
         super().__init__()
@@ -203,7 +200,6 @@ class FeedForward(nn.Module):
         c = self.down_proj(b)  # 降hidden_dim
 
         return self.dropout(c)
-
 
 class Attention(nn.Module):
     def __init__(self, config_args: modelConfig):
@@ -239,7 +235,7 @@ class Attention(nn.Module):
             .reshape(bs, slen, num_key_value_heads * n_rep, head_dim)
         )
 
-    def forward(self, x, pos, att_mask=None):
+    def forward(self, x, pos, att_mask=None,kv_cache=None,cache_use=False):
         batch_size, seq_len, embed_dim = x.shape
 
         # 线性变换
@@ -254,8 +250,32 @@ class Attention(nn.Module):
         xk = xk.view(batch_size, seq_len, self.num_key_value_heads, self.head_dim)  # .transpose(1, 2)
         xv = xv.view(batch_size, seq_len, self.num_key_value_heads, self.head_dim)  # .transpose(1, 2)
 
+        # past_kv=[None]*2
+        # if cache_use:
+        #     past_kv_cache=[]
+        #     xk = torch.cat((kv_cache[0],xk),dim=1)
+        #     xv = torch.cat((kv_cache[1], xv), dim=1)
+        #     past_kv[0] = xk
+        #     past_kv[1] = xv
+
         cos, sin = pos
-        xq, xk = PositionalEncoding_Rope.apply_rotary_pos_emb(xq, xk, cos[:seq_len], sin[:seq_len])
+
+        s_pos=0
+        if kv_cache is not None:
+            s_pos = kv_cache[0].shape[1]
+
+        xq, xk = PositionalEncoding_Rope.apply_rotary_pos_emb(xq, xk, cos[s_pos:s_pos+seq_len], sin[s_pos:s_pos+seq_len])
+
+        if kv_cache is not None:
+            xk = torch.cat([kv_cache[0], xk], dim=1)
+            xv = torch.cat([kv_cache[1], xv], dim=1)
+            # xq = torch.cat([kv_cache[2], xq], dim=1)
+            # if cache_use:
+            #     seq_len = xq.shape[1]
+        past_kv = (xk, xv) if cache_use else None
+
+        # seq_len cache_use=true和fasle 因为加了xq，所以缓存算法不同
+
 
         xq, xk, xv = (
             xq.transpose(1, 2),
@@ -295,11 +315,15 @@ class Attention(nn.Module):
 
         # 输入形状: (batch_size,num_heads,seq_length,d_model/hidden_dim)
         # 输出形状: (batch_size, seq_length, hidden_dim)
+
+
         output = output.transpose(1, 2).reshape(batch_size, seq_len, -1)
         output = self.o_proj(output)
         output = self.res_dropout(output)
-        return output
-
+        # if cache_use:
+        #     return output[:,-1:,:],past_kv
+        # else:
+        return output,past_kv
 
 class LittleBlock(nn.Module):
     def __init__(self, blockid, config_args: modelConfig):
@@ -310,17 +334,16 @@ class LittleBlock(nn.Module):
         self.fnn_rms_norm = RmsNorm(config_args.hidden_dim, config_args.rms_norm_eps)
         self.fnn = FeedForward(config_args)
 
-    def forward(self, x, pos):
+    def forward(self, x, pos,kv_cache=None,cache_use=False):
         y = self.att_rms_norm(x)  # 归一化
-        y = self.att(y, pos)
+        y,past_kv = self.att(y, pos,att_mask=None,kv_cache=kv_cache,cache_use=cache_use)
         y = y + x  # 残差
 
         z = self.fnn_rms_norm(y)  # 归一化
         z = self.fnn(z)
         z = z + y  # 残差
 
-        return z
-
+        return z,past_kv
 
 class LittleModel(nn.Module):
     def __init__(self, config_args: modelConfig):
@@ -334,7 +357,7 @@ class LittleModel(nn.Module):
 
         self.dropout = nn.Dropout(config_args.dropout)
         self.norm = RmsNorm(config_args.hidden_dim, ep=config_args.rms_norm_eps)
-        self.laysers = nn.ModuleList([LittleBlock(a, config_args) for a in range(self.num_attention_layers)])
+        self.laysers = nn.ModuleList([LittleBlock(bid, config_args) for bid in range(self.num_attention_layers)])
 
         freqs_cos, freqs_sin = PositionalEncoding_Rope.precompute_freqs_cis(
             dim=config_args.hidden_dim // config_args.num_attention_heads,
@@ -345,18 +368,21 @@ class LittleModel(nn.Module):
         self.register_buffer("freqs_sin", freqs_sin, persistent=False)
 
 
-    def forward(self, input_ids):
+    def forward(self, input_ids,past_key_values=None,cache_use=False):
         x = self.embedding(input_ids)
         y = self.dropout(x)
         # y = self.pos(x)
         pos = (self.freqs_cos, self.freqs_sin)
 
+        past_key_values = past_key_values if past_key_values is not None else [None]*len(self.laysers)
+        past_kvs =  [None]*len(self.laysers)
         for layer in self.laysers:
-            y = layer(y, pos)
+            kv_cache = past_key_values[layer.block_id]
+            y,past_kv_cache = layer(y, pos,kv_cache,cache_use)
+            past_kvs[layer.block_id] = past_kv_cache
         z = self.norm(y)
 
-        return z
-
+        return z,past_kvs
 
 class LittleForCausalLM(PreTrainedModel, GenerationMixin):
     config_class = modelConfig
@@ -373,8 +399,9 @@ class LittleForCausalLM(PreTrainedModel, GenerationMixin):
         self.OUT = CausalLMOutputWithPast()
 
 
-    def forward(self, input_ids: Optional[torch.Tensor] = None, **args):
-        out = self.model(input_ids=input_ids)
+    def forward(self, input_ids: Optional[torch.Tensor] = None, past_key_values=None,use_cache=False,**args):
+        out,past_kvs = self.model(input_ids=input_ids,past_key_values=past_key_values,cache_use=use_cache)
+        # out=out[:,-1,:].unsqueeze(0)
         out1 = self.lm_head(out)
         # return out1
         # 用于缓存kvcache
@@ -383,5 +410,69 @@ class LittleForCausalLM(PreTrainedModel, GenerationMixin):
         # self.OUT.__setitem__('last_hidden_state', out)
         self.OUT.__setitem__('logits', out1)
         # self.OUT.__setitem__('aux_loss', 0)
-        self.OUT.__setitem__('past_key_values', None)
+        self.OUT.__setitem__('past_key_values', past_kvs)
         return self.OUT
+
+class Little_Lora(nn.Module):
+    def __init__(self, in_features, out_features, rank=8, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.rank = rank
+        self.A = nn.Linear(in_features,self.rank, bias=False)
+        self.B = nn.Linear(self.rank,out_features, bias=False)
+        # 矩阵A高斯初始化
+        self.A.weight.data.normal_(mean=0.0, std=0.02)
+        # 矩阵B全0初始化
+        self.B.weight.data.zero_()
+
+    def forward(self,x):
+        a = self.A(x)
+        b = self.B(a)
+        return b
+
+    def hook_fun(self,module, input, output):
+        x = input[0]
+        lora_output = self.forward(x)
+        # 将 LoRA 结果加到原输出上
+        return output + lora_output
+
+    @staticmethod
+    def add_lora(model,lora_name,lora_rank,lora_target):
+        for name, module in model.named_modules():
+            if isinstance(module, nn.Linear):
+                if lora_target:
+                    if name.split('.')[-1] in lora_target:
+                        lora = Little_Lora(module.weight.shape[1], module.weight.shape[0], lora_rank)
+                        setattr(module, lora_name, lora)
+                        module.register_forward_hook(lora.hook_fun)
+                else:
+                    if module.weight.shape[0] == module.weight.shape[1]:
+                        lora = Little_Lora(module.weight.shape[0], module.weight.shape[1],lora_rank)
+                        setattr(module, lora_name, lora)
+                        module.register_forward_hook(lora.hook_fun)
+
+    @staticmethod
+    def load_lora(model,lora_model_file,device,lora_name):
+        import os
+        if os.path.exists(lora_model_file):
+            lora_dict = torch.load(lora_model_file, map_location=device)
+            for name, module in model.named_modules():
+                if hasattr(module, lora_name):
+                    lora = getattr(module,lora_name)
+                    lora_state={}
+                    for key_lora, value_lora in lora_dict.items():
+                        if f'{name}.{lora_name}.' in key_lora:
+                            state = {key_lora.replace(f'{name}.{lora_name}.', ''): value_lora}
+                            lora_state.update(state)
+                    lora.load_state_dict(lora_state)
+
+    @staticmethod
+    def save_lora(model, save_lora_path,lora_name):
+        dict_lora = {}
+        for name,module in model.named_modules():
+            if hasattr(module,lora_name):
+                lora = getattr(module,lora_name)
+                for key,value in lora.state_dict().items():
+                    state = {f'{name}.{lora_name}.{key}':value}
+                    dict_lora.update(state)
+        torch.save(dict_lora,save_lora_path)
+
