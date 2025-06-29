@@ -482,6 +482,8 @@ def get_loss_optim(model,config_train: trainConfig):
             else:
                 param.requires_grad = False
         optimizer = optim.AdamW(params, lr=config_train.learning_rate)
+        lora_params_count = sum(p.numel() for name, p in model.named_parameters() if config_train.lora_name in name)  # LoRA 参数数量
+        print(f'lora训练参数量：{lora_params_count / 1e7:.3f} 千万')
     else:
         optimizer = optim.AdamW(model.parameters(), lr=config_train.learning_rate)
     return loss_fct,optimizer
@@ -864,12 +866,13 @@ def init_lora_model_tokenizer(config_model,config_train:trainConfig, model_file)
             print(f'加载参数成功 {model_file}')
         else:
             print(f'没有可以加载的参数文件 {model_file}')
-        print(f'训练参数量：{sum(p.numel() for p in model.parameters() if p.requires_grad) / 1e9:.3f} B')
+        print(f'基座模型参数量：{sum(p.numel() for p in model.parameters() if p.requires_grad) / 1e9:.3f} B')
 
         if config_train.lora_name != '':
             lora_model_file_path = f'{config_train.out_path}/{config_train.lora_name}.pth'
             Little_Lora.add_lora(model,config_train.lora_name,config_train.lora_rank,config_train.lora_target)
             Little_Lora.load_lora(model,lora_model_file_path,config_model.device,config_train.lora_name)
+            print(f'加载lora参数 {config_train.lora_name}')
     except BaseException:
         print(f"Error: {BaseException}")
     return tokenizer, model

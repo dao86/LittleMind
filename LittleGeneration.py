@@ -21,7 +21,8 @@ def init_train(config_model, model_file_path, tokenizer_path):
         lora_model_file_path = f'{config_train.out_path}/{config_train.lora_name}.pth'
         Little_Lora.add_lora(model, config_train.lora_name, config_train.lora_rank, config_train.lora_target)
         Little_Lora.load_lora(model, lora_model_file_path, config_model.device, config_train.lora_name)
-
+        lora_params_count = sum(p.numel() for name, p in model.named_parameters() if config_train.lora_name in name)  # LoRA 参数数量
+        print(f'{lora_model_file_path}.lora参数量：{lora_params_count / 1e7:.3f} 千万')
     model.to(config_model.device)
     return tokenizer, model
 
@@ -275,8 +276,8 @@ if __name__ == "__main__":
     parser.add_argument("--dim", type=int, default=512, help="")
     parser.add_argument("--layernum", type=int, default=8, help="")
 
-    parser.add_argument("--lora_name", type=str, default='', help="")
-    parser.add_argument("--mode", type=str, default='lora', help="")
+    parser.add_argument("--lora_name", type=str, default='lora_aaa', help="")
+    parser.add_argument("--mode", type=str, default='sft', help="")
     args = parser.parse_args()
 
     config_model = modelConfig()
