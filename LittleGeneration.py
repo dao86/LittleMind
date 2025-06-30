@@ -165,21 +165,23 @@ def stream_generate(config_train,model, messages, tokenizer, device, cache_use=F
             past_key_values = outputs.past_key_values
 
             next_token_logits = outputs.logits[:, -1, :].to(copy=True, dtype=torch.float32, device=device)
-
-            next_token_logits = next_token_logits / temperature
+            #temperature
+            if temperature>0 and temperature<1:
+                next_token_logits = next_token_logits / temperature
 
             #暂不用 next_token_logits[:,input_ids.tolist()[0]]/=repetition_penalty
-
-            input_ids_tmp = input_ids.tolist()[0]
-            # 创建惩罚掩码：对于已出现的token，根据penalty调整其logits
-            for i, log_index in enumerate(input_ids_tmp):
-                if next_token_logits[0][log_index] < 0:
-                    # 负logit：惩罚系数应用为乘法（使值更小）
-                    next_token_logits[0][log_index] *= repetition_penalty
-                else:
-                    # 正logit：惩罚系数应用为除法（使值更小）
-                    next_token_logits[0][log_index] /= repetition_penalty
-
+            #repetition_penalty
+            if repetition_penalty > 0 and repetition_penalty !=1:
+                input_ids_tmp = input_ids.tolist()[0]
+                # 创建惩罚掩码：对于已出现的token，根据penalty调整其logits
+                for i, log_index in enumerate(input_ids_tmp):
+                    if next_token_logits[0][log_index] < 0:
+                        # 负logit：惩罚系数应用为乘法（使值更小）
+                        next_token_logits[0][log_index] *= repetition_penalty
+                    else:
+                        # 正logit：惩罚系数应用为除法（使值更小）
+                        next_token_logits[0][log_index] /= repetition_penalty
+            #sample top_p top_k
             if sample:
                 if top_p>0 and top_p<1:#top_p
                     #按概率从高到低排序
@@ -196,23 +198,23 @@ def stream_generate(config_train,model, messages, tokenizer, device, cache_use=F
                     next_token_logits[indices_to_remove] = -float('Inf')
                 else:#top_k
                     #获取 top-k 的 logit 及其对应的索引
-                    top_k_logits, top_k_indices = torch.topk(next_token_logits, top_k)
-                    #创建一个与 logits 同形状的新张量，只保留 top-k 的位置，其余设为 -inf
-                    filter = torch.full_like(next_token_logits, -float('Inf'))
-                    filter[:,top_k_indices] = top_k_logits
-                    next_token_logits=filter
-                    # #将过滤后的 logits 转换为概率分布
-                    # probs = torch.nn.functional.softmax(filter, dim=-1)
-                    # # 根据概率分布采样一个 token
-                    # next_token = torch.multinomial(probs, num_samples=1).item()
+                    if top_k >0 and top_k < 50:
+                        top_k_logits, top_k_indices = torch.topk(next_token_logits, top_k)
+                        #创建一个与 logits 同形状的新张量，只保留 top-k 的位置，其余设为 -inf
+                        filter = torch.full_like(next_token_logits, -float('Inf'))
+                        filter[:,top_k_indices] = top_k_logits
+                        next_token_logits=filter
 
+                #将过滤后的 next_token_logits 转换为概率分布
                 probability = torch.nn.functional.softmax(next_token_logits, dim=-1)
+                # 根据概率分布采样一个 next_tokens
                 next_tokens = torch.multinomial(probability, num_samples=1).squeeze(1)
             else:
                 next_tokens = next_token_logits.argmax(-1)
-
+            #是否输出eos
             is_not_end = (next_tokens[0].item() != 2)
-            if out_len > max_len:  # 输出大于 max_len 就停止输出
+            # 输出长度大于 max_len 就停止输出
+            if out_len > max_len:
                 is_not_end = False
             if stream and is_not_end:
                 yield next_tokens[0]
@@ -220,9 +222,6 @@ def stream_generate(config_train,model, messages, tokenizer, device, cache_use=F
             input_ids = torch.cat([input_ids, next_tokens[:, None]], dim=-1)
             out_len += 1
 
-        # tokenizer.de
-        # print(f'res : {tokenizer.decode(input_ids[0])}')
-        # print(f'res : {input_ids[0]}')
 
 
 def stream_little(tokenizer, model, config_model,config_train, msg, max_len):
@@ -290,6 +289,7 @@ if __name__ == "__main__":
     config_train.device = config_model.device
     config_train.lora_name = args.lora_name
     if config_train.lora_name!='':
+        config_train.lora_target = ['q_proj', 'k_proj', 'v_proj', 'o_proj']
         model_file_path = f'{config_train.out_path}/sft_{config_model.hidden_dim}.pth'
     else:
         model_file_path = f'{config_train.out_path}/{config_train.train_type}_{config_model.hidden_dim}.pth'
